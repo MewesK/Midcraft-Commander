@@ -1,0 +1,578 @@
+-----------------------------------------------------------------------------
+-- Midcraft Commander
+-- Author: MewK
+-- Version: 0.1.2
+--
+-- This program is released under the MIT License (MIT).
+-----------------------------------------------------------------------------
+
+local args = { ... }
+if # args == 1 and (args[1] == '-h' or args[1] == '?') then
+	print('Midcraft Commander 0.1.2')
+	print('')
+	print('Keys:')
+	print('  Ctrl  Activates the menu') 
+	print('  Tab   Activates the integrated shell')
+	print('')
+	print('Menu:')
+	print('  Run   Run with parameters command') 
+	print('  Ed    Edit command')
+	print('  Cp    Copy command') 
+	print('  Ct    Cut command')
+	print('  Pst   Paste command') 
+	print('  Dl    Delete command') 
+	print('  Rn    Rename Command') 
+	print('  NwFl  New File command') 
+	print('  NwDr  New directory command') 
+	print('  Qt    Exit command')
+	return
+end
+
+local running = true
+
+local w, h = term.getSize() -- int
+local hw = math.floor(w / 2)
+
+local views = {}
+views[1] = { x = 1, y = 2, width = hw - 1, height = h - 3, active = true, scrollOffset = 0, selectionIndex = 1, currentDirectory = '', entryList = {} }
+views[2] = { x = hw + 2, y = 2, width = hw - 1, height = h - 3, active = false, scrollOffset = 0, selectionIndex = 1, currentDirectory = '', entryList = {} }
+local _activeView = 1;
+local function activeView() return views[_activeView] end
+
+local menuActive = false
+local menuItems = { 'Run', 'Ed', 'Cp', 'Ct', 'Pst', 'Dl', 'Rn', 'NwFl', 'NwDr', 'Qt' }
+local menuItemSelection = 1
+
+local commandHistory = {}
+local copyIndex = 0
+local cutIndex = 0
+local copyCache = nil
+local cutCache = nil
+
+-- GUI
+
+local function trimString(text, width)
+	if width > 6 and string.len(text) > 0 and string.len(text) > width then
+		text = string.sub(text, 0, width - 3)..'...'
+	end
+	return text
+end
+
+local function drawEntries(view)
+	local drawIndex = 0
+	local startIndex = view.scrollOffset + 1
+	local endIndex = view.scrollOffset + view.height
+	if endIndex > # view.entryList then
+		endIndex = # view.entryList
+	end
+	
+	for index = startIndex, endIndex do
+		local entry = view.entryList[index]
+		local _entry = trimString(entry, view.width - 5)
+		
+		-- Selection indicator
+		if view.active and view.selectionIndex == index then
+			_entry = '» '.._entry
+		else
+			_entry = '  '.._entry
+		end
+		
+		-- Copy indicator
+		
+		if copyCache ~= nil and copyIndex == index then
+			local copyName = fs.getName(copyCache)
+			if fs.isDir(copyCache) then 
+				copyName = '/'..copyName 
+			end
+			if copyName == entry then
+				_entry = _entry..' +'
+			end
+			
+		-- Cut indicator
+		
+		elseif cutIndex == index and cutCache ~= nil then
+			local cutName = fs.getName(cutCache)
+			if fs.isDir(cutCache) then 
+				cutName = '/'..cutName 
+			end
+			if cutName == entry then
+				_entry = _entry..' -'
+			end
+		end
+		
+		term.setCursorPos(view.x, view.y + drawIndex)
+		term.write(_entry)
+		
+		drawIndex = drawIndex + 1
+	end
+end
+
+local function drawLineH(x, y, length)
+    term.setCursorPos(x, y)
+	for i = 1, length do
+		term.write('-')
+	end
+end
+
+local function drawLabeledLineH(x, y, length, text)
+	text = trimString(text, length - 5)
+	drawLineH(x, y, length)
+    term.setCursorPos(x + 1, y)
+	term.write(' '..text..' ')
+end
+
+local function drawLineV(x, y, length)
+	for i = 0, length - 1 do
+		term.setCursorPos(x, y + i)
+		if i == 0 or i == length - 1 then
+			term.write('+')
+		else
+			term.write('|')
+		end
+	end
+end
+
+local function redraw()
+	term.clear()
+
+	-- Draw frame
+    drawLabeledLineH(1, 1, hw, views[1].currentDirectory)
+	drawLabeledLineH(hw + 2, 1, hw, views[2].currentDirectory)
+	
+	drawLineH(1, h - 1, w)
+	drawLineV(hw + 1, 1, h - 1)
+	drawLineV(hw, 1, h - 1)
+	
+	-- Draw dir lists
+	for index, view in ipairs(views) do
+		drawEntries(view)
+	end
+	
+	-- Draw scroll indicators
+	-- Left top
+	if views[1].scrollOffset > 0 then
+		term.setCursorPos(hw, 2)
+		term.write('#')
+	end
+	-- Left bottom
+	if # views[1].entryList - views[1].scrollOffset > views[1].height then
+		term.setCursorPos(hw, h - 2)
+		term.write('#')
+	end
+	-- Right top
+	if views[2].scrollOffset > 0 then
+		term.setCursorPos(hw + 1, 2)
+		term.write('#')
+	end
+	-- Right bottom
+	if # views[2].entryList - views[2].scrollOffset > views[2].height then
+		term.setCursorPos(hw + 1, h - 2)
+		term.write('#')
+	end
+	
+	-- Draw menu
+	term.setCursorPos(3, h)
+	term.clearLine()
+	for index, item in ipairs(menuItems) do
+		if index == menuItemSelection and menuActive then
+			term.write('['..item..']')
+		else
+			term.write(' '..item..' ')
+		end
+	end
+end
+
+-- I/O
+
+local function readUserLine(prefix, commandHistory)
+	term.setCursorPos(1, h)
+	term.clearLine()
+	term.write(prefix)
+
+	local line = read(nil, commandHistory)
+	return line
+end
+
+local function moveEntry(source, destination, copyMode, forceOverwrite)
+	-- Input validation
+	if not source or not destination or not fs.exists(source) then
+		return 0
+	end
+
+	-- File equals
+	if source == destination then
+		return -1
+	end
+
+	-- File exists		
+	if fs.exists(destination) then
+		local overwrite
+		
+		if forceOverwrite then
+			overwrite = 'y'
+		else
+			overwrite = readUserLine('File exists. Overwrite? (y/n): ', nil)
+		end
+			
+		if overwrite == 'y' then
+			fs.delete(destination)
+			if copyMode then
+				fs.copy(source, destination)
+			else
+				fs.move(source, destination)
+			end
+			return 2
+		else
+			return -2
+		end
+	else
+		if copyMode then
+			fs.copy(source, destination)
+		else
+			fs.move(source, destination)
+		end
+		return 1
+	end
+end
+
+local function readDirectory(path)
+	-- Sort into dirs/files
+	local files = {}
+	local dirs = {}
+
+	if path ~= '/' then
+		table.insert(dirs, '/..')
+	end
+	
+	for index, entry in pairs(fs.list(path)) do
+		local sPath = fs.combine(path, entry)
+		if fs.isDir(sPath) then
+			table.insert(dirs, '/'..entry)
+		else
+			table.insert(files, entry)
+		end
+	end
+				
+	table.sort(dirs)
+	table.sort(files)
+	
+	for index, file in ipairs(files) do
+		table.insert(dirs, file)
+	end
+	
+	return dirs
+end
+
+-- Other
+
+local function refreshViews()
+	for n, view in ipairs(views) do
+		view.entryList = readDirectory(view.currentDirectory)
+	end
+	redraw()
+end
+
+local function clearCache() 
+	copyCache = nil
+	cutCache = nil
+	copyIndex = 0
+	cutIndex = 0
+end
+
+-- Execution
+
+local function runProgram(path, ...)
+	term.clear()
+	term.setCursorPos(1, 1)
+	shell.run(path, ...)
+	
+	-- Wait for user action if text is on screen
+	local cx,cy = term.getCursorPos()
+	if cx ~= 1 or cy ~= 1 then
+		local text = '< Press any key to continue >'
+		term.setCursorPos(hw - math.floor(string.len(text) / 2), h)
+		term.clearLine()
+		term.write(text)
+		
+		repeat
+			local event, param = os.pullEvent()
+		until event == 'key'
+	end
+	
+	redraw()
+end
+
+local function runCommand(command)
+	local words = {}
+	for match in string.gmatch(command, "[^ \t]+") do
+		table.insert(words, match)
+	end
+
+	if words[1] then
+		runProgram(words[1], unpack(words, 2))
+		refreshViews()
+	end
+end
+
+local function executeEntry(path)
+	if fs.exists(path) then
+		if fs.isDir(path) then
+			return readDirectory(path)
+		else
+			runProgram(path)
+			refreshViews()
+		end
+	end
+	return nil
+end
+
+-- Menu
+
+local menuFunctions = {
+	-- Run with parameters command
+	['Run'] = function(path)
+		local parameter = readUserLine('Parameters: ', nil)
+		runCommand(path..' '..parameter)
+		redraw()
+	end,
+	
+	-- Edit command
+	['Ed'] = function(path)
+		if not fs.isDir(path) then
+			runProgram('edit', path)
+		end
+	end,
+	
+	-- Copy command
+	['Cp'] = function(path)
+		clearCache()
+		copyCache = path
+		copyIndex = activeView().selectionIndex
+		redraw()
+	end,
+	
+	-- Cut command
+	['Ct'] = function(path)
+		clearCache()
+		cutCache = path
+		cutIndex = activeView().selectionIndex
+		redraw()
+	end,
+	
+	-- Paste command
+	['Pst'] = function(path)
+		if copyCache ~= nil or cutCache ~= nil then
+			local code
+			
+			-- Copy
+			if copyCache ~= nil	then	
+				code = moveEntry(copyCache, fs.combine(activeView().currentDirectory, fs.getName(copyCache)), true, false)
+			
+			-- Move
+			else
+				code = moveEntry(cutCache, fs.combine(activeView().currentDirectory, fs.getName(cutCache)), false, false)
+			end
+			
+			-- Overwrite canceled
+			if code == -2 then
+				redraw()
+				
+			-- Source equals destination or invalid parameter
+			elseif code == -1 or code == 0 then
+				clearCache()
+				redraw()
+				
+			-- Attempt successful
+			elseif code == 1 or code == 2 then
+				clearCache()
+				refreshViews()
+			end
+		end
+	end,
+	
+	-- Delete command
+	['Dl'] = function(path)
+		path = shell.resolve(path)
+		fs.delete(path)
+		activeView().selectionIndex = activeView().selectionIndex - 1
+		if (activeView().selectionIndex < 1) then
+			activeView().selectionIndex = 1
+		end
+		refreshViews()
+	end,
+	
+	-- New File command
+	['Rn'] = function(path)
+		local name = readUserLine('New Name: ', nil)
+		if name ~= '' then
+			moveEntry(path, fs.combine(activeView().currentDirectory, name), false, true)
+			refreshViews()
+		end
+	end,
+	
+	-- New File command
+	['NwFl'] = function(path)
+		local name = readUserLine('Name: ', nil)
+		if name ~= '' then
+			path = shell.resolve('/'..fs.combine(activeView().currentDirectory, name))
+			local file = io.open(path, 'w')
+			file:write(' ') -- edit can't handle empty files
+			file:close()
+			refreshViews()
+		else
+			redraw()
+		end
+	end,
+	
+	-- New directory command
+	['NwDr'] = function(path)
+		local name = readUserLine('Name: ', nil)
+		if name ~= '' then
+			path = shell.resolve('/'..fs.combine(activeView().currentDirectory, name))
+			fs.makeDir(path)
+			refreshViews()
+		else
+			redraw()
+		end
+	end,
+	
+	-- Exit command
+	['Qt'] = function(path)
+		running = false
+	end
+}
+
+local function callMenuItem(name, path)
+	local menuFunction = menuFunctions[menuItems[name]]
+	if menuFunction then
+		menuFunction(path)
+	end
+
+	menuActive = false
+	redraw()
+end
+
+-- Body
+
+for n, view in ipairs(views) do
+	view.currentDirectory = '/'..shell.dir();
+	view.entryList = readDirectory(view.currentDirectory);
+end
+
+redraw()
+
+while running do
+  local event, param = os.pullEvent()
+  if event == 'key' then
+	-- Up
+    if param == 200 then
+		-- Move entry selection
+		if not menuActive then
+			if activeView().selectionIndex > 1 then
+				activeView().selectionIndex = activeView().selectionIndex - 1
+				if activeView().selectionIndex <= activeView().scrollOffset then
+					activeView().scrollOffset = activeView().scrollOffset - activeView().height
+				end
+				redraw()
+			end
+		end
+	
+	-- Down
+	elseif param == 208 then
+		-- Move entry selection
+		if not menuActive then
+			if activeView().selectionIndex < # activeView().entryList then
+				activeView().selectionIndex = activeView().selectionIndex + 1
+				if activeView().selectionIndex > activeView().height + activeView().scrollOffset then
+					activeView().scrollOffset = activeView().scrollOffset + activeView().height
+				end
+				redraw()
+			end
+		end
+
+	-- Left
+	elseif param == 203 then
+		-- Change active side
+		if not menuActive then
+			if _activeView == 2 then
+				activeView().active = false
+				_activeView = 1
+				activeView().active = true
+				redraw()
+			end
+			
+		-- Move menu selection
+		else
+			menuItemSelection = menuItemSelection - 1
+			if menuItemSelection < 1 then
+				menuItemSelection = # menuItems
+			end
+			redraw()
+		end
+	
+	-- Right
+	elseif param == 205 then
+		-- Change active side
+		if not menuActive then
+			if _activeView == 1 then
+				activeView().active = false
+				_activeView = 2
+				activeView().active = true
+				redraw()
+			end
+			
+		-- Move menu selection
+		else
+			menuItemSelection = menuItemSelection + 1
+		  	if menuItemSelection > # menuItems then
+				menuItemSelection = 1
+		  	end
+		  	redraw()
+		end
+	
+	-- Enter
+	elseif param == 28 then
+		local targetPath = '/'..fs.combine(activeView().currentDirectory, activeView().entryList[activeView().selectionIndex])
+		-- Run
+		if not menuActive then
+			local newEntryList = executeEntry(targetPath)
+			if newEntryList ~= nil then
+				activeView().currentDirectory = targetPath
+				activeView().selectionIndex = 1
+				activeView().entryList = newEntryList
+				redraw()
+			end
+			
+		-- Menu selection
+		else
+			callMenuItem(menuItemSelection, targetPath)
+		end
+	
+	-- Ctrl (menu toggle)
+	elseif param == 29 then
+		menuActive = not menuActive
+		if menuActive then
+			menuItemSelection = 1
+		end
+		redraw()
+	
+	-- Tab (command line toggle)
+	elseif param == 15 then
+		local command
+		repeat
+			command = readUserLine(shell.dir()..'> ', commandHistory)
+			if command ~= '' then
+				if command ~= commandHistory[# commandHistory] then
+					table.insert(commandHistory, command)
+				end
+				runCommand(command)
+			end
+		until command == ''
+		
+		redraw()
+	end
+  end
+end
+
+term.clear()
+term.setCursorPos(1, 1)
