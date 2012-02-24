@@ -23,8 +23,8 @@ end
 -- - editor path
 -- - folder default action (run, edit, help)
 
-shell.run('midcraft-commander-libs/drawing.lua')
-shell.run('midcraft-commander-libs/filesystem.lua')
+shell.run('drawing.lua')
+shell.run('filesystem.lua')
 
 -- General vars
 local running = true
