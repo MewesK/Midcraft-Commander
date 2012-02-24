@@ -32,6 +32,7 @@ function moveEntry(source, destination, copyMode, forceOverwrite)
 			overwrite = 'y'
 		else
 			term.setCursorPos(1, h)
+			term.clearLine()
 			overwrite = read('File exists. Overwrite? (y/n): ', nil)
 		end
 			

@@ -14,53 +14,79 @@ if # args == 1 and (args[1] == '-h' or args[1] == '?') then
 	print('  Ctrl   Activates the menu') 
 	print('  Tab    Activates the integrated shell')
 	print('  Space  Selects/deselects an entry')
-	print('Menu:')
-	print('  Run    Run with parameters command') 
-	print('  Ed     Edit command')
-	print('  Cp     Copy command') 
-	print('  Ct     Cut command')
-	print('  Pst    Paste command') 
-	print('  Dl     Delete command') 
-	print('  Rn     Rename Command') 
-	print('  NwFl   New file command') 
-	print('  NwDr   New directory command') 
-	print('  Qt     Exit command')
 	return
 end
--- drop down menus
--- shortcuts
 
+-- TODO:
+-- shortcuts
 -- config file
 -- - editor path
--- - folder action (run, edit, help)
+-- - folder default action (run, edit, help)
+
 shell.run('midcraft-commander-libs/drawing.lua')
 shell.run('midcraft-commander-libs/filesystem.lua')
 
+-- General vars
 local running = true
+local keyFunctions = {}
 
+-- Terminal vars
 local w, h = term.getSize()
 local hw = math.floor(w / 2)
 
+-- View vars
 local views = {}
-views[1] = { x = 1, y = 2, width = hw - 1, height = h - 3, active = true, scrollOffset = 0, selectionIndex = 1, currentDirectory = '', entryList = {} }
-views[2] = { x = hw + 2, y = 2, width = hw - 1, height = h - 3, active = false, scrollOffset = 0, selectionIndex = 1, currentDirectory = '', entryList = {} }
 local _activeView = 1;
 
-local keyFunctions = {}
-
+-- Menu vars
 local menuActive = false
 local menuFunctions = {}
 local menuItemSelection = 0
+local subMenuItemSelection = 0
 
+-- Shell vars
 local commandHistory = {}
 
+-- Clipboard vars
 local clipboard = {}
 local clipboardAction = 0 -- 0 = none, 1 = copy, 2 = cut
+
+-- Init views
+
+local shellPath = buildPath(shell.dir(), nil)
+views = {
+	{
+		x = 1, 
+		y = 2, 
+		width = hw - 1, 
+		height = h - 3, 
+		active = true, 
+		scrollOffset = 0, 
+		selectionIndex = 1, 
+		currentDirectory = shellPath, 
+		entryList = listEntries(shellPath)
+	},
+	{
+		x = hw + 2, 
+		y = 2, 
+		width = hw - 1, 
+		height = h - 3, 
+		active = false, 
+		scrollOffset = 0, 
+		selectionIndex = 1, 
+		currentDirectory = shellPath, 
+		entryList = listEntries(shellPath)
+	}
+}
 
 -- Functions
 
 local function activeView() 
 	return views[_activeView] 
+end
+
+local function activeMenu() 
+	return menuFunctions[menuItemSelection] 
 end
 
 local function readUserLine(prefix, commandHistory)
@@ -85,12 +111,10 @@ end
 
 local function drawScreen()
 	term.clear()
-
+	
 	-- Draw frame
     drawLabeledLineH(1, 1, hw, views[1].currentDirectory)
 	drawLabeledLineH(hw + 2, 1, hw, views[2].currentDirectory)
-	
-	drawLineH(1, h - 1, w)
 	
 	drawLineV(hw + 1, 1, h - 1)
 	drawLineV(hw, 1, h - 1)
@@ -99,9 +123,6 @@ local function drawScreen()
 	for index, view in ipairs(views) do
 		drawEntries(view, clipboard, clipboardAction, buildPath)
 	end
-	
-	-- Draw menu
-	drawMenu(3, h, menuFunctions, menuItemSelection)
 	
 	-- Draw scroll indicators
 	
@@ -128,133 +149,154 @@ local function drawScreen()
 		term.setCursorPos(hw + 1, h - 2)
 		term.write('#')
 	end
+		
+	-- Draw menu (drawn last to overwrite views if necesary)
+	drawMenu(1, h, menuFunctions, menuItemSelection, subMenuItemSelection)
 end
 
 -- Menu
 
 menuFunctions = {
-	-- Run with parameters command
-	{ 
-		name = 'Run',
-		action = function(path)
-			local parameter = readUserLine('Parameters: ', nil)
-			parseCommand(path..' '..parameter)
-		end
-	},
-	
-	-- Edit command
-	{ 
-		name = 'Ed',
-		action = function(path)
-			if not fs.isDir(path) then
-				runProgram('edit', path)
-			end
-		end
-	},
-	
-	-- Copy command
-	{ 
-		name = 'Cp',
-		action = function(path)
-			if clipboardAction == 1 then
-				clipboardAction = 0
-			else
-				clipboardAction = 1
-			end
-		end
-	},
-	
-	-- Cut command
-	{ 
-		name = 'Ct',
-		action = function(path)
-			if clipboardAction == 2 then
-				clipboardAction = 0
-			else
-				clipboardAction = 2
-			end
-		end
-	},
-	
-	-- Paste command
-	{ 
-		name = 'Pst',
-		action = function(path)
-			if clipboardAction > 0 then			
-				for index, value in ipairs(clipboard) do
-					local targetPath = buildPath(activeView().currentDirectory, fs.getName(value))
-					-- Copy
-					if clipboardAction == 1 then
-						moveEntry(value, targetPath, true, false)
-					
-					-- Move
-					elseif clipboardAction  == 2 then
-						moveEntry(value, targetPath, false, false)
+	-- File sub-menu
+	{
+		name = 'File',
+		children = {
+			-- Run with parameters command
+			{ 
+				name = 'Run',
+				action = function(path)
+					local parameter = readUserLine('Parameters: ', nil)
+					parseCommand(path..' '..parameter)
+				end
+			},
+			
+			-- Edit command
+			{ 
+				name = 'Edit',
+				action = function(path)
+					if not fs.isDir(path) then
+						runProgram('edit', path)
 					end
 				end
-				
-				clearClipBoard()
-				refreshEntries()
-			end
-		end
+			},
+			
+			-- Copy command
+			{ 
+				name = 'Copy',
+				action = function(path)
+					if clipboardAction == 1 then
+						clipboardAction = 0
+					else
+						clipboardAction = 1
+					end
+				end
+			},
+			
+			-- Cut command
+			{ 
+				name = 'Cut',
+				action = function(path)
+					if clipboardAction == 2 then
+						clipboardAction = 0
+					else
+						clipboardAction = 2
+					end
+				end
+			},
+			
+			-- Paste command
+			{ 
+				name = 'Paste',
+				action = function(path)
+					if clipboardAction > 0 then			
+						for index, value in ipairs(clipboard) do
+							local targetPath = buildPath(activeView().currentDirectory, fs.getName(value))
+							-- Copy
+							if clipboardAction == 1 then
+								moveEntry(value, targetPath, true, false)
+							
+							-- Move
+							elseif clipboardAction  == 2 then
+								moveEntry(value, targetPath, false, false)
+							end
+						end
+						
+						clearClipBoard()
+						refreshEntries()
+					end
+				end
+			},
+			
+			-- Delete command
+			{ 
+				name = 'Delete',
+				action = function(path)
+					for index, value in ipairs(clipboard) do
+						fs.delete(value)
+						if value == path then
+							activeView().selectionIndex = activeView().selectionIndex - 1
+							if (activeView().selectionIndex < 1) then
+								activeView().selectionIndex = 1
+							end
+						end
+					end
+					
+					clearClipBoard()
+					refreshEntries()
+				end
+			},
+			
+			-- New File command
+			{ 
+				name = 'Rename',
+				action = function(path)
+					local name = readUserLine('New Name: ', nil)
+					if name ~= '' then
+						moveEntry(path, buildPath(activeView().currentDirectory, name), false, true)
+						refreshEntries()
+					end
+				end
+			}
+		}
 	},
 	
-	-- Delete command
-	{ 
-		name = 'Dl',
-		action = function(path)
-			fs.delete(path)
-			activeView().selectionIndex = activeView().selectionIndex - 1
-			if (activeView().selectionIndex < 1) then
-				activeView().selectionIndex = 1
-			end
-			refreshEntries()
-		end
-	},
-	
-	-- New File command
-	{ 
-		name = 'Rn',
-		action = function(path)
-			local name = readUserLine('New Name: ', nil)
-			if name ~= '' then
-				moveEntry(path, buildPath(activeView().currentDirectory, name), false, true)
-				refreshEntries()
-			end
-		end
-	},
-	
-	-- New File command
-	{ 
-		name = 'NwFl',
-		action = function(path)
-			local name = readUserLine('Name: ', nil)
-			if name ~= '' then
-				path = buildPath(activeView().currentDirectory, name)
-				local file = io.open(path, 'w')
-				file:write('')
-				file:close()
-				refreshEntries()
-			end
-		end
-	},
-	
-	-- New directory command
-	{ 
-		name = 'NwDr',
-		action = function(path)
-			local name = readUserLine('Name: ', nil)
-			if name ~= '' then
-				path = buildPath(activeView().currentDirectory, name)
-				fs.makeDir(path)
-				refreshEntries()
-			end
-		end
+	-- System sub-menu
+	{
+		name = 'System',
+		children = {
+			-- New File command
+			{ 
+				name = 'New file',
+				action = function(path)
+					local name = readUserLine('Name: ', nil)
+					if name ~= '' then
+						path = buildPath(activeView().currentDirectory, name)
+						local file = io.open(path, 'w')
+						file:write('')
+						file:close()
+						refreshEntries()
+					end
+				end
+			},
+			
+			-- New folder command
+			{ 
+				name = 'New folder',
+				action = function(path)
+					local name = readUserLine('Name: ', nil)
+					if name ~= '' then
+						path = buildPath(activeView().currentDirectory, name)
+						fs.makeDir(path)
+						refreshEntries()
+					end
+				end
+			}
+		}
 	},
 	
 	-- Exit command
 	{ 
-		name = 'Qt',
+		name = 'Exit',
 		action = function(path)
 			running = false
 		end
@@ -276,6 +318,14 @@ keyFunctions = {
 						activeView().scrollOffset = activeView().scrollOffset - activeView().height
 					end
 				end
+			else
+				local _activeMenu = activeMenu()
+				if _activeMenu and _activeMenu.children then
+					subMenuItemSelection = subMenuItemSelection - 1
+					if subMenuItemSelection < 1 then
+						subMenuItemSelection = # _activeMenu.children
+					end
+				end
 			end
 		end
 	},
@@ -292,6 +342,14 @@ keyFunctions = {
 						activeView().scrollOffset = activeView().scrollOffset + activeView().height
 					end
 				end
+			else
+				local _activeMenu = activeMenu()
+				if _activeMenu and _activeMenu.children then
+					subMenuItemSelection = subMenuItemSelection + 1
+					if subMenuItemSelection > # _activeMenu.children then
+						subMenuItemSelection = 1
+					end
+				end
 			end
 		end
 	},
@@ -300,13 +358,14 @@ keyFunctions = {
 	{ 
 		code = 203,
 		action = function()
-			-- Change active side
+			-- Change active view
 			if not menuActive then
-				if _activeView == 2 then
-					activeView().active = false
-					_activeView = 1
-					activeView().active = true
+				activeView().active = false
+				_activeView = _activeView - 1
+				if _activeView < 1 then
+					_activeView = # views
 				end
+				activeView().active = true
 				
 			-- Move menu selection
 			else
@@ -314,6 +373,7 @@ keyFunctions = {
 				if menuItemSelection < 1 then
 					menuItemSelection = # menuFunctions
 				end
+				subMenuItemSelection = 1
 			end
 		end
 	},
@@ -324,11 +384,12 @@ keyFunctions = {
 		action = function()
 			-- Change active side
 			if not menuActive then
-				if _activeView == 1 then
-					activeView().active = false
-					_activeView = 2
-					activeView().active = true
+				activeView().active = false
+				_activeView = _activeView + 1
+				if _activeView > # views then
+					_activeView = 1
 				end
+				activeView().active = true
 				
 			-- Move menu selection
 			else
@@ -336,6 +397,7 @@ keyFunctions = {
 				if menuItemSelection > # menuFunctions then
 					menuItemSelection = 1
 				end
+				subMenuItemSelection = 1
 			end
 		end
 	},
@@ -363,14 +425,21 @@ keyFunctions = {
 				
 			-- Menu selection
 			else
-				for index, menuFunction in ipairs(menuFunctions) do
-					if index == menuItemSelection then
-						menuFunction.action(targetPath)
+				local menuItem = menuFunctions[menuItemSelection]
+				if menuItem then
+					if menuItem.action then
+						menuItem.action(targetPath)
+					elseif menuItem.children then
+						local subMenuItem = menuItem.children[subMenuItemSelection]
+						if subMenuItem and subMenuItem.action then
+							subMenuItem.action(targetPath)
+						end
 					end
 				end
 				
 				menuActive = false
 				menuItemSelection = 0
+				subMenuItemSelection = 0
 			end
 		end
 	},
@@ -382,8 +451,10 @@ keyFunctions = {
 			menuActive = not menuActive
 			if menuActive then
 				menuItemSelection = 1
+				subMenuItemSelection = 1
 			else
 				menuItemSelection = 0
+				subMenuItemSelection = 0
 			end
 		end
 	},
@@ -440,11 +511,6 @@ keyFunctions = {
 }
 
 -- Body
-
-for index, view in ipairs(views) do
-	view.currentDirectory = buildPath(shell.dir(), nil);
-	view.entryList = listEntries(view.currentDirectory);
-end
 
 drawScreen()
 
