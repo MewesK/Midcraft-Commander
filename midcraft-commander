@@ -1,14 +1,14 @@
 -----------------------------------------------------------------------------
 -- Midcraft Commander
 -- Author: MewK
--- Version: 0.5 alpha
+-- Version: 0.5 beta
 --
 -- This program is released under the MIT License (MIT).
 -----------------------------------------------------------------------------
 
 local args = { ... }
 if # args == 1 and (args[1] == '-h' or args[1] == '?') then
-	print('Midcraft Commander 0.5 alpha')
+	print('Midcraft Commander 0.5 beta')
 	print('')
 	print('Keys:')
 	print('  Ctrl   Activates the menu') 
@@ -23,9 +23,6 @@ end
 --	2 = text
 --	3 = virtual file
 --	4 = help file
-
--- TODO v0.5
--- menu shortcuts
 
 -- TODO v1.0
 -- networking
@@ -269,6 +266,7 @@ menuFunctions = {
 			-- Run with parameters command
 			{ 
 				name = 'Run...',
+				param = 19, -- r
 				action = function(entry)
 					-- Files
 					if entry.type == 1 then
@@ -281,6 +279,7 @@ menuFunctions = {
 			-- Edit command
 			{ 
 				name = 'Edit',
+				param = 18, -- e
 				action = function(entry)
 					if entry.type ~= 0 and entry.type ~= 3 then
 						runProgram(config.editor, entry.fullpath)
@@ -291,6 +290,7 @@ menuFunctions = {
 			-- Copy command
 			{ 
 				name = 'Copy',
+				param = 46, -- c
 				action = function(entry)
 					-- If clipboard is empty, use current selection
 					if # clipboard == 0 then
@@ -308,6 +308,7 @@ menuFunctions = {
 			-- Cut command
 			{ 
 				name = 'Cut',
+				param = 45, -- x
 				action = function(entry)
 					-- If clipboard is empty, use current selection
 					if # clipboard == 0 then
@@ -325,6 +326,7 @@ menuFunctions = {
 			-- Paste command
 			{ 
 				name = 'Paste',
+				param = 47, -- v
 				action = function(entry)
 					if clipboardAction > 0 then			
 						for index, _entry in ipairs(clipboard) do
@@ -360,6 +362,7 @@ menuFunctions = {
 			-- Delete command
 			{ 
 				name = 'Delete',
+				param = 32, -- d
 				action = function(entry)
 					-- If clipboard is empty, use current selection
 					if # clipboard == 0 then
@@ -383,6 +386,7 @@ menuFunctions = {
 			-- Format command
 			{ 
 				name = 'Format',
+				param = 33, -- f
 				action = function(entry)
 					local confirmation = readUserLine('Delete all files in this folder/disc? (y/n): ', nil)
 					if confirmation == 'y' then
@@ -395,6 +399,7 @@ menuFunctions = {
 			-- Info command
 			{ 
 				name = 'Info',
+				param = 23, -- i
 				action = function(entry)
 					local _text = {}
 					local __text = {}
@@ -687,10 +692,26 @@ drawScreen()
 -- Fetch key events
 while running do
 	local event, param = os.pullEvent('key')
+	-- Key functions
 	for index, keyFunction in ipairs(keyFunctions) do
 		if keyFunction.code == param then
 			keyFunction.action()
 			drawScreen()
+			break
+		end
+	end
+	
+	-- Menu shortcuts
+	for index, menuFunction in ipairs(menuFunctions) do
+		if menuFunction.children then
+			for subIndex, subMenuFunction in ipairs(menuFunction.children) do
+				if subMenuFunction.param and subMenuFunction.param == param then
+					subMenuFunction.action(activeView().entryList[activeView().selectionIndex])
+					hideMenu()
+					drawScreen()
+					break
+				end
+			end
 		end
 	end
 end

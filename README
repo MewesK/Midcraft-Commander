@@ -1,4 +1,4 @@
-Midcraft Commander 0.5 alpha
+Midcraft Commander 0.5 beta
 
 An orthodox file manager for CraftOS. Inspired by GNU Midnight Commander.
 
@@ -24,6 +24,15 @@ Features:
 		Multi-select files & folders (use Space key)
 		Menu/Sub-menu structure (use Ctrl key)
 		Integrated shell (use Tab key)
+		Menu shortcuts (use Ctrl key + shortcut key)
+			r	Run...
+			e	Edit
+			c	Copy
+			x	Cut
+			v	Paste
+			d	Delete
+			f	Format
+			i	Info
 		Path-sesitive file handling
 			Opens files in /rom/help with help viewer (customizable)
 			Opens files in /rom/api whit editor (customizable)
@@ -31,4 +40,7 @@ Features:
 	Config file:
 		Customize editor path
 		Customize help viewer path
-		Set the filetype for specific folders to change the start action (1 = program, 2 = text, 4 = help file)
+		Set the filetype for specific folders to change the start action
+			1	program file
+			2	text file
+			4	help file
