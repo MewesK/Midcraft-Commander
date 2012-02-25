@@ -297,15 +297,15 @@ menuFunctions = {
 				name = 'Paste',
 				action = function(entry)
 					if clipboardAction > 0 then			
-						for index, entry in ipairs(clipboard) do
-							local targetPath = buildPath(activeView().currentFolder, entry.name)
+						for index, _entry in ipairs(clipboard) do
+							local targetPath = buildPath(activeView().currentFolder, _entry.name)
 							-- Copy
 							if clipboardAction == 1 then
-								moveEntry(entry, targetPath, true, false)
+								moveEntry(_entry, targetPath, true, false)
 							
 							-- Move
 							elseif clipboardAction  == 2 then
-								moveEntry(entry, targetPath, false, false)
+								moveEntry(_entry, targetPath, false, false)
 							end
 						end
 						
@@ -324,9 +324,9 @@ menuFunctions = {
 						addToClipboard(entry)
 					end
 					
-					for index, value in ipairs(clipboard) do
-						fs.delete(value)
-						if value == entry then
+					for index, _entry in ipairs(clipboard) do
+						fs.delete(_entry.fullpath)
+						if _entry.fullpath == entry.fullpath then
 							activeView().selectionIndex = activeView().selectionIndex - 1
 							if (activeView().selectionIndex < 1) then
 								activeView().selectionIndex = 1
