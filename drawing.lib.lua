@@ -63,7 +63,7 @@ function drawEntries(view, clipboard, clipboardAction, buildPath)
 		
 		local selected = false
 		for index, value in ipairs(clipboard) do
-			if value == entry.fullpath then
+			if value.fullpath == entry.fullpath then
 				selected = true
 				break
 			end

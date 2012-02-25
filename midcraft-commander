@@ -29,6 +29,7 @@ end
 -- networking
 -- file info
 -- format disks
+
 -- open help files
 -- config file
 -- - editor path
@@ -101,13 +102,10 @@ local function clearClipboard()
 end
 
 local function addToClipboard(entry)
-	if not fs.exists(entry.fullpath) then
-		return
-	end
-
 	local entryIndex = 0
+
 	for index, value in ipairs(clipboard) do
-		if value.fullpath == path.fullpath then
+		if value.fullpath == entry.fullpath then
 			entryIndex = index
 			break
 		end
@@ -118,7 +116,7 @@ local function addToClipboard(entry)
 		if # clipboard == 0 then
 			clipboardAction = 0
 		end
-	else
+	elseif entry.name ~= '..' and fs.exists(entry.fullpath) then
 		table.insert(clipboard, entry)
 	end
 end
@@ -172,38 +170,36 @@ end
 
 -- Music folder
 virtualEntries = {
-	createEntry('/', 'music', 0, function(_this)
-		local discs = {}
-		for index, side in ipairs(redstone.getSides()) do
-			if disk.isPresent(side) and disk.hasAudio(side) then
-				-- Music entry
-				table.insert(discs, createEntry(
-					'/music', 
-					disk.getAudioTitle(side), 
-					3, 
-					function(__this)
-						if __this.meta and __this.meta.side and disk.isPresent(__this.meta.side) and disk.hasAudio(__this.meta.side) then
-							if _this.meta.playing and _this.meta.playing == __this.meta.side then
-								disk.stopAudio(_this.meta.playing)
-								_this.meta.playing = nil
-							else
-								disk.playAudio(__this.meta.side)
-								_this.meta.playing = __this.meta.side
+	createEntry('/', 'music', 0, 
+		function(_this)
+			local discs = {}
+			for index, side in ipairs(redstone.getSides()) do
+				if disk.isPresent(side) and disk.hasAudio(side) then
+					-- Music entry
+					table.insert(discs, createEntry(
+						_this.fullpath, 
+						disk.getAudioTitle(side), 
+						3, 
+						function(__this)
+							if __this.meta and __this.meta.side and disk.isPresent(__this.meta.side) and disk.hasAudio(__this.meta.side) then
+								if _this.meta.playing and _this.meta.playing == __this.meta.side then
+									disk.stopAudio(_this.meta.playing)
+									_this.meta.playing = nil
+								else
+									disk.playAudio(__this.meta.side)
+									_this.meta.playing = __this.meta.side
+								end
 							end
-						end
-						return __this
-					end, 
-					{ 
-						['side'] = side
-					}
-				))
+							return __this
+						end, 
+						{ ['side'] = side }
+					))
+				end
 			end
-		end
-		return discs
-	end, 
-	{ 
-		['playing'] = nil
-	})
+			return discs
+		end, 
+		{ ['playing'] = nil }
+	)
 }
 
 -- Views
@@ -301,15 +297,15 @@ menuFunctions = {
 				name = 'Paste',
 				action = function(entry)
 					if clipboardAction > 0 then			
-						for index, value in ipairs(clipboard) do
-							local targetPath = buildPath(activeView().currentFolder, fs.getName(value))
+						for index, entry in ipairs(clipboard) do
+							local targetPath = buildPath(activeView().currentFolder, entry.name)
 							-- Copy
 							if clipboardAction == 1 then
-								moveEntry(value, targetPath, true, false)
+								moveEntry(entry, targetPath, true, false)
 							
 							-- Move
 							elseif clipboardAction  == 2 then
-								moveEntry(value, targetPath, false, false)
+								moveEntry(entry, targetPath, false, false)
 							end
 						end
 						
