@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------
 -- Midcraft Commander
 -- Author: MewK
--- Version: 0.2
+-- Version: 0.5
 --
 -- This program is released under the MIT License (MIT).
 -----------------------------------------------------------------------------
@@ -85,39 +85,49 @@ function moveEntry(entry, destination, copyMode, forceOverwrite)
 	end
 end
 
-function listEntries(folder, virtualEntries)
+function listEntries(folder, virtualEntries, folderTypes)
 	-- Sort into dirs/files
 	local dirs = {}
 	local files = {}
 	
 	-- Get files and folders
 	if folder.fullpath ~= '/' then
-		table.insert(dirs, createEntry(folder.fullpath, '..', 0))	-- 0 = open
+		table.insert(dirs, createEntry(folder.fullpath, '..', 0))	-- 0 = folder
 	end
 	
 	if fs.exists(folder.fullpath) then
+		local fileType = 1	-- 1 = program
+		
+		-- Overwrite type if necessary
+		for _path, _type in pairs(folderTypes) do
+			if folder.fullpath == _path and (_type == 1 or _type == 2 or _type == 4) then
+				fileType = _type
+				break
+			end
+		end
+		
 		for index, entry in ipairs(fs.list(folder.fullpath)) do
 			if fs.isDir(buildPath(folder, entry)) then
-				table.insert(dirs, createEntry(folder.fullpath, entry, 0))	-- 0 = open
+				table.insert(dirs, createEntry(folder.fullpath, entry, 0))	-- 0 = folder
 			else
-				table.insert(files, createEntry(folder.fullpath, entry, 1))	-- 1 = run
+				table.insert(files, createEntry(folder.fullpath, entry, fileType))
 			end
 		end
 	end	
 	
 	-- Handle virtual entries
 	for index, entry in ipairs(virtualEntries) do
-		-- virtual entry
-		if entry.path == folder.fullpath then
-			table.insert(dirs, entry)	-- 0 = folder/open
-		
 		-- virtual folder
+		if entry.path == folder.fullpath then
+			table.insert(dirs, entry)	-- 0 = folder
+		
+		-- virtual entry
 		elseif entry.fullpath == folder.fullpath and entry.action then
 			for index, _entry in ipairs(entry.action(entry)) do
 				if _entry.type == 0 then
-					table.insert(dirs, _entry)	-- 0 = open
+					table.insert(dirs, _entry)	-- 0 = folder
 				else
-					table.insert(files, _entry)	-- 1 = run
+					table.insert(files, _entry)
 				end
 			end
 		end

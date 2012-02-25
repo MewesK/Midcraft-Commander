@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------
 -- Midcraft Commander
 -- Author: MewK
--- Version: 0.2
+-- Version: 0.5
 --
 -- This program is released under the MIT License (MIT).
 -----------------------------------------------------------------------------
@@ -19,23 +19,21 @@ end
 
 -- Entry types:
 --	0 = folder
---	1 = executable file
---	2 = text file
+--	1 = program
+--	2 = text
 --	3 = virtual file
 --	4 = help file
 
--- TODO:
+-- TODO v0.5
 -- menu shortcuts
--- networking
 -- file info
 -- format disks
 
--- open help files
--- config file
--- - editor path
--- - folder default action (run, edit, help)
+-- TODO v1.0
+-- networking
 
 -- Include additional functions
+shell.run('config.lib.lua')
 shell.run('drawing.lib.lua')
 shell.run('filesystem.lib.lua')
 
@@ -64,8 +62,17 @@ local subMenuItemSelection = 0
 -- Integrated shell vars
 local commandHistory = {}
 
--- Music vars
-local playingMusic = nil
+-- Config
+local configPath = 'midcraft-commander.conf'
+local config = loadConfig(configPath, {
+	editor = 'edit',
+	helpViewer = 'help',
+	folderTypes = {
+		['/rom/apis'] = 2,
+		['/rom/apis/turtle'] = 2,
+		['/rom/help'] = 4
+	}
+})
 
 -- Clipboard vars
 local clipboard = {}
@@ -92,7 +99,7 @@ end
 
 local function refreshEntries()
 	for n, view in ipairs(views) do
-		view.entryList = listEntries(view.currentFolder, virtualEntries)
+		view.entryList = listEntries(view.currentFolder, virtualEntries, config.folderTypes)
 	end
 end
 
@@ -133,7 +140,7 @@ local function drawScreen()
 	
 	-- Draw dir lists
 	for index, view in ipairs(views) do
-		drawEntries(view, clipboard, clipboardAction, buildPath)
+		drawEntries(view, clipboard, clipboardAction, virtualEntries, buildPath)
 	end
 	
 	-- Draw scroll indicators
@@ -168,8 +175,8 @@ end
 
 -- Virtual entries
 
--- Music folder
 virtualEntries = {
+	-- Music folder
 	createEntry('/', 'music', 0, 
 		function(_this)
 			local discs = {}
@@ -214,7 +221,7 @@ views = {
 		scrollOffset = 0, 
 		selectionIndex = 1, 
 		currentFolder = shellEntry, 
-		entryList = listEntries(shellEntry, virtualEntries)
+		entryList = listEntries(shellEntry, virtualEntries, config.folderTypes)
 	},
 	{
 		x = hw + 2, 
@@ -225,7 +232,7 @@ views = {
 		scrollOffset = 0, 
 		selectionIndex = 1, 
 		currentFolder = shellEntry, 
-		entryList = listEntries(shellEntry, virtualEntries)
+		entryList = listEntries(shellEntry, virtualEntries, config.folderTypes)
 	}
 }
 
@@ -253,7 +260,7 @@ menuFunctions = {
 				name = 'Edit',
 				action = function(entry)
 					if entry.type ~= 0 and entry.type ~= 3 then
-						runProgram('edit', entry.fullpath)
+						runProgram(config.editor, entry.fullpath)
 					end
 				end
 			},
@@ -505,11 +512,11 @@ keyFunctions = {
 				-- Folder
 				if entry.type == 0 then
 					if entry.name == '..' then
-						entry = createEntryFromPath(buildPath(entry))
+						entry = createEntry(entry.fullpath)
 					end
 					activeView().currentFolder = entry
 					activeView().selectionIndex = 1
-					activeView().entryList = listEntries(entry, virtualEntries)
+					activeView().entryList = listEntries(entry, virtualEntries, config.folderTypes)
 					
 				-- Executable files
 				elseif entry.type == 1 then
@@ -517,15 +524,15 @@ keyFunctions = {
 					
 				-- Text file
 				elseif entry.type == 2 then
-					runProgram(entry.fullpath)
+					runProgram(config.editor, entry.fullpath)
 				
 				-- Virtual file
 				elseif entry.type == 3 and entry.action then
 					entry.action(entry)
-					
+				
 				-- Help file
 				elseif entry.type == 4 then
-					runProgram('help', entry.name)
+					runProgram(config.helpViewer, entry.name)
 				end
 				
 				refreshEntries()
@@ -597,10 +604,11 @@ keyFunctions = {
 	}
 }
 
--- Body
+-- Draw screen
 
 drawScreen()
 
+-- Fetch key events
 while running do
 	local event, param = os.pullEvent('key')
 	for index, keyFunction in ipairs(keyFunctions) do
@@ -611,5 +619,9 @@ while running do
 	end
 end
 
+-- Write Config
+saveConfig(configPath, config)
+
+-- Clear screen
 term.clear()
 term.setCursorPos(1, 1)

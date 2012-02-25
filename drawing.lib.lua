@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------
 -- Midcraft Commander
 -- Author: MewK
--- Version: 0.2
+-- Version: 0.5
 --
 -- This program is released under the MIT License (MIT).
 -----------------------------------------------------------------------------
@@ -48,7 +48,7 @@ function drawLineV(x, y, length)
 	end
 end
 
-function drawEntries(view, clipboard, clipboardAction, buildPath)
+function drawEntries(view, clipboard, clipboardAction, virtualEntries, buildPath)
 	local y = 0
 	local _start = view.scrollOffset + 1
 	local _end = view.scrollOffset + view.height
@@ -59,47 +59,54 @@ function drawEntries(view, clipboard, clipboardAction, buildPath)
 	
 	for index = _start, _end do
 		local entry = view.entryList[index]
-		local name = trimText(entry.name, view.width - 4)
-		
-		local selected = false
-		for index, value in ipairs(clipboard) do
-			if value.fullpath == entry.fullpath then
-				selected = true
-				break
-			end
-		end
+		local prefix = ''
+		local suffix = ''
 		
 		-- Folder prefix
 		if entry.type == 0 then
-			name = '/'..name
+			prefix = '/'..prefix
 		end
 		
 		-- Position indicator
 		if view.active and view.selectionIndex == index then
-			name = '» '..name
+			prefix = '» '..prefix
 		else
-			name = '  '..name
+			prefix = '  '..prefix
+		end
+		
+		-- Play indicator
+		for index, _entry in ipairs(virtualEntries) do
+			if _entry.name == 'music' then
+				if _entry.meta and _entry.meta.playing and entry.meta and _entry.meta.playing == entry.meta.side then
+					suffix = suffix..' >'
+				end
+				break
+			end
 		end
 		
 		-- Selection indicator
-		if selected then
-			-- Default indicator
-			if clipboardAction == 0 then
-				name = name..' ?'
-				
-			-- Copy indicator
-			elseif clipboardAction == 1 then
-				name = name..' +'
+		local selected = false
+		for index, _entry in ipairs(clipboard) do
+			if _entry.fullpath == entry.fullpath then
+				-- Default indicator
+				if clipboardAction == 0 then
+					suffix = suffix..' ?'
+					
+				-- Copy indicator
+				elseif clipboardAction == 1 then
+					suffix = suffix..' +'
 
-			-- Cut indicator
-			elseif clipboardAction == 2 then
-				name = name..' -'
+				-- Cut indicator
+				elseif clipboardAction == 2 then
+					suffix = suffix..' -'
+				end
 				
+				break
 			end
 		end
 		
 		term.setCursorPos(view.x, view.y + y)
-		term.write(name)
+		term.write(prefix..trimText(entry.name, view.width - (# prefix + # suffix))..suffix)
 		
 		y = y + 1
 	end
