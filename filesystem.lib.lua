@@ -109,7 +109,7 @@ function listEntries(folder, virtualEntries)
 	for index, entry in ipairs(virtualEntries) do
 		-- virtual entry
 		if entry.path == folder.fullpath then
-			table.insert(files, entry)	-- 0 = folder/open
+			table.insert(dirs, entry)	-- 0 = folder/open
 		
 		-- virtual folder
 		elseif entry.fullpath == folder.fullpath and entry.action then
