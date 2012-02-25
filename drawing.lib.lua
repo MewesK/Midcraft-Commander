@@ -59,43 +59,47 @@ function drawEntries(view, clipboard, clipboardAction, buildPath)
 	
 	for index = _start, _end do
 		local entry = view.entryList[index]
-		local entryTrimmed = trimText(entry, view.width - 4)
-		local entryPath = buildPath(view.currentDirectory, entry)
+		local name = trimText(entry.name, view.width - 4)
 		
 		local selected = false
 		for index, value in ipairs(clipboard) do
-			if value == entryPath then
+			if value == entry.fullpath then
 				selected = true
 				break
 			end
 		end
 		
+		-- Folder prefix
+		if entry.type == 0 then
+			name = '/'..name
+		end
+		
 		-- Position indicator
 		if view.active and view.selectionIndex == index then
-			entryTrimmed = '» '..entryTrimmed
+			name = '» '..name
 		else
-			entryTrimmed = '  '..entryTrimmed
+			name = '  '..name
 		end
 		
 		-- Selection indicator
 		if selected then
 			-- Default indicator
 			if clipboardAction == 0 then
-				entryTrimmed = entryTrimmed..' ?'
+				name = name..' ?'
 				
 			-- Copy indicator
 			elseif clipboardAction == 1 then
-				entryTrimmed = entryTrimmed..' +'
+				name = name..' +'
 
 			-- Cut indicator
 			elseif clipboardAction == 2 then
-				entryTrimmed = entryTrimmed..' -'
+				name = name..' -'
 				
 			end
 		end
 		
 		term.setCursorPos(view.x, view.y + y)
-		term.write(entryTrimmed)
+		term.write(name)
 		
 		y = y + 1
 	end
