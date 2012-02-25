@@ -8,6 +8,7 @@
 
 local w, h = term.getSize()
 local hw = math.floor(w / 2)
+local hh = math.floor(h / 2)
 
 function trimText(text, width)
 	if width > 6 and # text > 0 and # text > width then
@@ -23,29 +24,67 @@ function padText(text, width, char)
 	return text
 end
 
-function drawLineH(x, y, length)
+function drawLineH(x, y, length, drawCorner)
     term.setCursorPos(x, y)
 	for i = 1, length do
-		term.write('-')
+		if drawCorner and (i == 1 or i == length) then
+			term.write('+')
+		else
+			term.write('-')
+		end
 	end
 end
 
-function drawLabeledLineH(x, y, length, text)
-	text = trimText(text, length - 5)
-	drawLineH(x, y, length)
+function drawLabeledLineH(x, y, length, text, drawCorner)
+	text = trimText(text, length - 4)
+	drawLineH(x, y, length, drawCorner)
     term.setCursorPos(x + 1, y)
 	term.write(' '..text..' ')
 end
 
-function drawLineV(x, y, length)
-	for i = 0, length - 1 do
-		term.setCursorPos(x, y + i)
-		if i == 0 or i == length - 1 then
+function drawLineV(x, y, length, drawCorner)
+	for i = 1, length do
+		term.setCursorPos(x, y + i - 1)
+		if drawCorner and (i == 1 or i == length) then
 			term.write('+')
 		else
 			term.write('|')
 		end
 	end
+end
+
+function clearBox(_x, _y, _w, _h)
+	for __y = _y, _y + _h - 1 do
+		for __x = _x, _x + _w - 1 do
+			term.setCursorPos(__x, __y)
+			term.write(' ')
+		end
+	end	
+end
+
+function drawBox(_x, _y, _w, _h, title, text)
+	clearBox(_x, _y, _w, _h)
+	
+	drawLineV(_x, _y, _h, false)
+	drawLineV(_x + _w - 1, _y, _h, false)
+	
+	drawLineH(_x, _y, _w, true)
+	drawLineH(_x, _y + 2, _w, true)
+	drawLineH(_x, _y + _h - 1, _w, true)
+	
+	term.setCursorPos(_x + 2, _y + 1)
+	term.write(trimText(title, _w - 4))
+
+	for index, line in ipairs(text) do
+		term.setCursorPos(_x + 2, _y + 2 + index)
+		term.write(trimText(line, _w - 4))
+	end
+end
+
+function drawBoxCentered(_w, _h, title, text)
+	local _x = hw - math.floor(_w / 2)
+	local _y = hh - math.floor(_h / 2)
+	drawBox(_x, _y, _w, _h, title, text)
 end
 
 function drawEntries(view, clipboard, clipboardAction, virtualEntries, buildPath)
@@ -106,7 +145,7 @@ function drawEntries(view, clipboard, clipboardAction, virtualEntries, buildPath
 		end
 		
 		term.setCursorPos(view.x, view.y + y)
-		term.write(prefix..trimText(entry.name, view.width - (# prefix + # suffix))..suffix)
+		term.write(prefix..trimText(entry.name, view.width - (2 + # suffix))..suffix)
 		
 		y = y + 1
 	end
@@ -114,9 +153,6 @@ end
 
 function drawMenu(x, y, menuFunctions, menuItemSelection, subMenuItemSelection)
 	local currentX  = x
-	
-	-- Draw menu border
-	drawLineH(x, y - 1, w)
 	
 	-- Clear menu area
 	term.setCursorPos(x, y)
@@ -139,7 +175,7 @@ function drawMenu(x, y, menuFunctions, menuItemSelection, subMenuItemSelection)
 						maxSubItemWidth = currentLen
 					end
 				end
-				local menuWidth = maxSubItemWidth + 5
+				local menuWidth = maxSubItemWidth + 6
 				
 				-- Calculate sub-menu height
 				local menuHeight = # menuFunction.children + 2
@@ -147,9 +183,9 @@ function drawMenu(x, y, menuFunctions, menuItemSelection, subMenuItemSelection)
 				-- Draw menu border		
 				local currentY = y - menuHeight		
 				
-				drawLineH(currentX, currentY, menuWidth)
-				drawLineV(currentX, currentY, menuHeight)
-				drawLineV(currentX + menuWidth, currentY, menuHeight)
+				drawLineH(currentX, currentY, menuWidth, true)
+				drawLineV(currentX, currentY, menuHeight, true)
+				drawLineV(currentX + menuWidth - 1, currentY, menuHeight, true)
 				
 				-- Draw sub-menu items
 				for subIndex, subMenuFunction in ipairs(menuFunction.children) do

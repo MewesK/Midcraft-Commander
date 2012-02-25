@@ -14,10 +14,11 @@ Features:
 		Scrolling lists
 		Proper handling for long filenames
 	Functions:
-		Copy, cut, paste & Rename functions for files and directories
-		Run & edit functions for files/programs
-		New directory & new empty file functions
+		Copy, cut, paste & rename for files and directories
+		Run & edit for files/programs
+		New folder & new empty file functions
 		Lists, plays & stops music discs
+		Extended file info
 	Usability:
 		Multi-select files & folders (use Space key)
 		Menu/Sub-menu structure (use Ctrl key)

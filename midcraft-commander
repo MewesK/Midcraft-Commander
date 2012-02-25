@@ -26,7 +26,7 @@ end
 
 -- TODO v0.5
 -- menu shortcuts
--- file info
+-- music info
 -- format disks
 
 -- TODO v1.0
@@ -58,6 +58,9 @@ local menuActive = false
 local menuFunctions = {}
 local menuItemSelection = 0
 local subMenuItemSelection = 0
+
+-- Windows
+local window = nil
 
 -- Integrated shell vars
 local commandHistory = {}
@@ -132,11 +135,12 @@ local function drawScreen()
 	term.clear()
 	
 	-- Draw frame
-    drawLabeledLineH(1, 1, hw, views[1].currentFolder.fullpath)
-	drawLabeledLineH(hw + 2, 1, hw, views[2].currentFolder.fullpath)
+    drawLabeledLineH(1, 1, hw - 1, views[1].currentFolder.fullpath, false)
+	drawLabeledLineH(hw + 2, 1, hw - 1, views[2].currentFolder.fullpath, false)
+	drawLineH(1, h - 1, w, false)
 	
-	drawLineV(hw + 1, 1, h - 1)
-	drawLineV(hw, 1, h - 1)
+	drawLineV(hw + 1, 1, h - 1, true)
+	drawLineV(hw, 1, h - 1, true)
 	
 	-- Draw dir lists
 	for index, view in ipairs(views) do
@@ -169,8 +173,13 @@ local function drawScreen()
 		term.write('#')
 	end
 		
-	-- Draw menu (drawn last to overwrite views if necesary)
+	-- Draw menu
 	drawMenu(1, h, menuFunctions, menuItemSelection, subMenuItemSelection)
+	
+	-- Draw window
+	if window then
+		drawBoxCentered(window.w, window.h, window.title, window.text)
+	end
 end
 
 -- Virtual entries
@@ -355,6 +364,39 @@ menuFunctions = {
 						moveEntry(entry, buildPath(activeView().currentFolder, name), false, true)
 						refreshEntries()
 					end
+				end
+			},
+			
+			-- Info command
+			{ 
+				name = 'Info',
+				action = function(entry)
+					local _text
+					if entry.type == 0 then
+						_text = {
+							'Path:',
+							entry.fullpath, '',
+							'Read Only:',
+							''..(fs.isReadOnly(entry.fullpath) and 'true' or 'false')
+						}
+					elseif entry.type > 0 and fs.exists(entry.fullpath) then
+						_text = {
+							'Path:',
+							entry.fullpath, '',
+							'Size:',
+							''..fs.getSize(entry.fullpath)..' bytes', '',
+							'Read Only:',
+							''..(fs.isReadOnly(entry.fullpath) and 'true' or 'false')
+						}
+					else
+						-- TODO: Music info
+						_text = { 'No info available.' }
+					end
+					
+					window = { w = 40, h = # _text + 4, title = 'Info', text = _text }
+					drawScreen()
+					os.pullEvent('key')
+					window = nil
 				end
 			}
 		}
@@ -605,7 +647,6 @@ keyFunctions = {
 }
 
 -- Draw screen
-
 drawScreen()
 
 -- Fetch key events
