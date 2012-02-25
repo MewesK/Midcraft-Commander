@@ -1,7 +1,6 @@
 -----------------------------------------------------------------------------
 -- Midcraft Commander
 -- Author: MewK
--- Version: 0.5
 --
 -- This program is released under the MIT License (MIT).
 -----------------------------------------------------------------------------
@@ -16,14 +15,15 @@ function buildPath(entry, name)
 	return '/' .. fs.combine(entry or '', name or '')
 end
 
-function createEntry(_path, _name, _type, _action, _meta)
+function createEntry(_path, _name, _type, _action, _meta, _info)
 	return {
 		['path'] = _path,
 		['name'] = _name,
 		['fullpath'] = buildPath(_path, _name),
 		['type'] = _type,
 		['action'] = _action,
-		['meta'] = _meta
+		['meta'] = _meta,
+		['info'] = _info
 	}
 end
 
@@ -39,6 +39,22 @@ end
 
 function compareEntries(entry1, entry2) 
 	return entry1.fullpath < entry2.fullpath
+end
+
+function deleteEntry(entry)
+	if not fs.isReadOnly(entry.fullpath) and not (entry.meta and entry.meta.side) then
+		fs.delete(entry.fullpath)
+		return true
+	end
+	return false
+end
+
+function formatFolder(folder)
+	if fs.isDir(folder.fullpath) then
+		for index, entry in ipairs(fs.list(folder.fullpath)) do
+			deleteEntry(createEntry(folder, entry))
+		end
+	end
 end
 
 function moveEntry(entry, destination, copyMode, forceOverwrite)
@@ -108,7 +124,20 @@ function listEntries(folder, virtualEntries, folderTypes)
 		
 		for index, entry in ipairs(fs.list(folder.fullpath)) do
 			if fs.isDir(buildPath(folder, entry)) then
-				table.insert(dirs, createEntry(folder.fullpath, entry, 0))	-- 0 = folder
+				local _side = nil
+				for index, __side in ipairs(redstone.getSides()) do
+					if disk.isPresent(__side) and disk.hasData(__side) and buildPath(disk.getMountPath(__side)) == buildPath(folder, entry) then
+						_side = __side
+						break
+					end
+				end
+				-- External folder
+				if _side then
+					table.insert(dirs, createEntry(folder.fullpath, entry, 0, nil, { side = _side }))	-- 0 = folder
+				-- Internal folder
+				else
+					table.insert(dirs, createEntry(folder.fullpath, entry, 0))	-- 0 = folder
+				end
 			else
 				table.insert(files, createEntry(folder.fullpath, entry, fileType))
 			end

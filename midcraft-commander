@@ -1,14 +1,14 @@
 -----------------------------------------------------------------------------
 -- Midcraft Commander
 -- Author: MewK
--- Version: 0.5
+-- Version: 0.5 alpha
 --
 -- This program is released under the MIT License (MIT).
 -----------------------------------------------------------------------------
 
 local args = { ... }
 if # args == 1 and (args[1] == '-h' or args[1] == '?') then
-	print('Midcraft Commander 0.2')
+	print('Midcraft Commander 0.5 alpha')
 	print('')
 	print('Keys:')
 	print('  Ctrl   Activates the menu') 
@@ -26,8 +26,6 @@ end
 
 -- TODO v0.5
 -- menu shortcuts
--- music info
--- format disks
 
 -- TODO v1.0
 -- networking
@@ -89,6 +87,18 @@ end
 
 local function activeMenu() 
 	return menuFunctions[menuItemSelection] 
+end
+
+local function hideMenu()
+	menuActive = false
+	menuItemSelection = 0
+	subMenuItemSelection = 0
+end
+
+local function showMenu()
+	menuActive = true
+	menuItemSelection = 1
+	subMenuItemSelection = 1
 end
 
 local function readUserLine(prefix, commandHistory)
@@ -208,13 +218,17 @@ virtualEntries = {
 							end
 							return __this
 						end, 
-						{ ['side'] = side }
+						{ 
+							['side'] = side
+						}
 					))
 				end
 			end
 			return discs
 		end, 
-		{ ['playing'] = nil }
+		{
+			['playing'] = nil 
+		}
 	)
 }
 
@@ -331,6 +345,18 @@ menuFunctions = {
 				end
 			},
 			
+			-- Rename command
+			{ 
+				name = 'Rename',
+				action = function(entry)
+					local name = readUserLine('New Name: ', nil)
+					if name ~= '' then
+						moveEntry(entry, buildPath(activeView().currentFolder, name), false, true)
+						refreshEntries()
+					end
+				end
+			},
+			
 			-- Delete command
 			{ 
 				name = 'Delete',
@@ -341,8 +367,7 @@ menuFunctions = {
 					end
 					
 					for index, _entry in ipairs(clipboard) do
-						fs.delete(_entry.fullpath)
-						if _entry.fullpath == entry.fullpath then
+						if deleteEntry(_entry) and _entry.fullpath == entry.fullpath then
 							activeView().selectionIndex = activeView().selectionIndex - 1
 							if (activeView().selectionIndex < 1) then
 								activeView().selectionIndex = 1
@@ -355,13 +380,13 @@ menuFunctions = {
 				end
 			},
 			
-			-- New File command
+			-- Format command
 			{ 
-				name = 'Rename',
+				name = 'Format',
 				action = function(entry)
-					local name = readUserLine('New Name: ', nil)
-					if name ~= '' then
-						moveEntry(entry, buildPath(activeView().currentFolder, name), false, true)
+					local confirmation = readUserLine('Delete all files in this folder/disc? (y/n): ', nil)
+					if confirmation == 'y' then
+						formatFolder(entry)
 						refreshEntries()
 					end
 				end
@@ -371,29 +396,44 @@ menuFunctions = {
 			{ 
 				name = 'Info',
 				action = function(entry)
-					local _text
-					if entry.type == 0 then
-						_text = {
-							'Path:',
-							entry.fullpath, '',
-							'Read Only:',
-							''..(fs.isReadOnly(entry.fullpath) and 'true' or 'false')
-						}
-					elseif entry.type > 0 and fs.exists(entry.fullpath) then
-						_text = {
-							'Path:',
-							entry.fullpath, '',
-							'Size:',
-							''..fs.getSize(entry.fullpath)..' bytes', '',
-							'Read Only:',
-							''..(fs.isReadOnly(entry.fullpath) and 'true' or 'false')
-						}
-					else
-						-- TODO: Music info
-						_text = { 'No info available.' }
+					local _text = {}
+					local __text = {}
+					
+					-- Path
+					table.insert(_text, 'Path:')
+					table.insert(_text, entry.fullpath)
+					
+					-- Filesize & drive
+					if entry.type > 0 and fs.exists(entry.fullpath) then
+						table.insert(_text, 'Size:')
+						table.insert(_text, fs.getSize(entry.fullpath)..' bytes')
+					end
+					
+					-- Virtual entry
+					if entry.type == 3 and entry.info then
+						-- Merge arrays
+						for index, line in ipairs(entry.info) do
+							table.insert(_text, line)
+						end
+					end
+					
+					-- Side
+					if entry.meta and entry.meta.side then
+						table.insert(_text, 'Side:')
+						table.insert(_text, entry.meta.side)
+					end
+					
+					-- Readonly
+					if fs.exists(entry.fullpath) then
+						table.insert(_text, 'Drive:')
+						table.insert(_text, fs.getDrive(entry.fullpath))
+						table.insert(_text, 'Read Only:')
+						table.insert(_text, ''..(fs.isReadOnly(entry.fullpath) and 'true' or 'false'))
+					
 					end
 					
 					window = { w = 40, h = # _text + 4, title = 'Info', text = _text }
+					hideMenu()
 					drawScreen()
 					os.pullEvent('key')
 					window = nil
@@ -593,9 +633,7 @@ keyFunctions = {
 					end
 				end
 				
-				menuActive = false
-				menuItemSelection = 0
-				subMenuItemSelection = 0
+				hideMenu()
 			end
 		end
 	},
@@ -604,13 +642,10 @@ keyFunctions = {
 	{ 
 		code = 29,
 		action = function()
-			menuActive = not menuActive
 			if menuActive then
-				menuItemSelection = 1
-				subMenuItemSelection = 1
+				hideMenu()
 			else
-				menuItemSelection = 0
-				subMenuItemSelection = 0
+				showMenu()
 			end
 		end
 	},

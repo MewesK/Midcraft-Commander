@@ -1,4 +1,4 @@
-Midcraft Commander 0.2
+Midcraft Commander 0.5 alpha
 
 An orthodox file manager for CraftOS. Inspired by GNU Midnight Commander.
 
@@ -17,6 +17,7 @@ Features:
 		Copy, cut, paste & rename for files and directories
 		Run & edit for files/programs
 		New folder & new empty file functions
+		Format for folders and discs
 		Lists, plays & stops music discs
 		Extended file info
 	Usability:
