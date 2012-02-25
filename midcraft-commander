@@ -18,7 +18,10 @@ if # args == 1 and (args[1] == '-h' or args[1] == '?') then
 end
 
 -- TODO:
--- shortcuts
+-- menu shortcuts
+-- file info
+-- play music
+-- open help files
 -- config file
 -- - editor path
 -- - folder default action (run, edit, help)
@@ -46,6 +49,8 @@ local subMenuItemSelection = 0
 
 -- Shell vars
 local commandHistory = {}
+local playingMusic = nil
+
 
 -- Clipboard vars
 local clipboard = {}
@@ -104,9 +109,47 @@ local function refreshEntries()
 	end
 end
 
-local function clearClipBoard() 
+function stopMusicDisc()
+	if playingMusic then
+		disk.stopAudio(playingMusic)
+		playingMusic = nil
+	end
+end
+
+function runMusicDisc(side)
+	stopMusicDisc()
+	if disk.isPresent(side) and disk.hasAudio(side) then
+		playingMusic = side
+		disk.playAudio(side)
+	end
+end
+
+local function clearClipboard() 
 	clipboard = {}
 	clipboardAction = 0
+end
+
+local function addToClipboard(path)
+	if not fs.exists(path) then
+		return
+	end
+
+	local entryIndex = 0
+	for index, value in ipairs(clipboard) do
+		if value == path then
+			entryIndex = index
+			break
+		end
+	end
+	
+	if entryIndex > 0 then
+		table.remove(clipboard, entryIndex)
+		if # clipboard == 0 then
+			clipboardAction = 0
+		end
+	else
+		table.insert(clipboard, path)
+	end
 end
 
 local function drawScreen()
@@ -184,6 +227,11 @@ menuFunctions = {
 			{ 
 				name = 'Copy',
 				action = function(path)
+					-- If clipboard is empty, use current selection
+					if # clipboard == 0 then
+						addToClipboard(path)
+					end
+				
 					if clipboardAction == 1 then
 						clipboardAction = 0
 					else
@@ -196,6 +244,11 @@ menuFunctions = {
 			{ 
 				name = 'Cut',
 				action = function(path)
+					-- If clipboard is empty, use current selection
+					if # clipboard == 0 then
+						addToClipboard(path)
+					end
+					
 					if clipboardAction == 2 then
 						clipboardAction = 0
 					else
@@ -221,7 +274,7 @@ menuFunctions = {
 							end
 						end
 						
-						clearClipBoard()
+						clearClipboard()
 						refreshEntries()
 					end
 				end
@@ -231,6 +284,11 @@ menuFunctions = {
 			{ 
 				name = 'Delete',
 				action = function(path)
+					-- If clipboard is empty, use current selection
+					if # clipboard == 0 then
+						addToClipboard(path)
+					end
+					
 					for index, value in ipairs(clipboard) do
 						fs.delete(value)
 						if value == path then
@@ -241,7 +299,7 @@ menuFunctions = {
 						end
 					end
 					
-					clearClipBoard()
+					clearClipboard()
 					refreshEntries()
 				end
 			},
@@ -289,6 +347,14 @@ menuFunctions = {
 						fs.makeDir(path)
 						refreshEntries()
 					end
+				end
+			},
+			
+			-- Stop music command
+			{ 
+				name = 'Stop music',
+				action = function(path)
+					stopMusicDisc()
 				end
 			}
 		}
@@ -409,14 +475,24 @@ keyFunctions = {
 			local targetPath = buildPath(activeView().currentDirectory, activeView().entryList[activeView().selectionIndex])
 			-- Run
 			if not menuActive then
-				local newEntryList = nil
+				-- Play music
+				if activeView().currentDirectory == '/music' then
+					local side = targetPath.match(targetPath, '%(([^%)]+)%)$')
+					if side == 'top' or side == 'bottom' or side == 'left' or side == 'right' or side == 'back' or side == 'front' then
+						runMusicDisc(side)
+						return
+					end
+				end
 				
-				if fs.exists(targetPath) then
-					if fs.isDir(targetPath) then
-						newEntryList = listEntries(targetPath)
+				-- Files & folders
+				if fs.exists(targetPath) or targetPath == '/music' then
+					-- Folders
+					if fs.isDir(targetPath) or targetPath == '/music' then
 						activeView().currentDirectory = targetPath
 						activeView().selectionIndex = 1
-						activeView().entryList = newEntryList
+						activeView().entryList = listEntries(targetPath)
+					
+					-- Files
 					else
 						runProgram(targetPath)
 						refreshEntries()
@@ -471,7 +547,7 @@ keyFunctions = {
 						table.insert(commandHistory, command)
 					end
 					parseCommand(command)
-					refreshViews()
+					refreshEntries()
 				end
 			until command == ''
 		end
@@ -489,22 +565,7 @@ keyFunctions = {
 					return
 				end
 				
-				local entryIndex = 0
-				for index, value in ipairs(clipboard) do
-					if value == targetPath then
-						entryIndex = index
-						break
-					end
-				end
-				
-				if entryIndex > 0 then
-					table.remove(clipboard, entryIndex)
-					if # clipboard == 0 then
-						clipboardAction = 0
-					end
-				else
-					table.insert(clipboard, targetPath)
-				end
+				addToClipboard(targetPath)
 			end
 		end
 	}

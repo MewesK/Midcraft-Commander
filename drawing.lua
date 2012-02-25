@@ -59,12 +59,12 @@ function drawEntries(view, clipboard, clipboardAction, buildPath)
 	
 	for index = _start, _end do
 		local entry = view.entryList[index]
-		local _entry = trimText(entry, view.width - 4)
-		local __entry = buildPath(view.currentDirectory, entry)
+		local entryTrimmed = trimText(entry, view.width - 4)
+		local entryPath = buildPath(view.currentDirectory, entry)
 		
 		local selected = false
 		for index, value in ipairs(clipboard) do
-			if value == __entry then
+			if value == entryPath then
 				selected = true
 				break
 			end
@@ -72,30 +72,30 @@ function drawEntries(view, clipboard, clipboardAction, buildPath)
 		
 		-- Position indicator
 		if view.active and view.selectionIndex == index then
-			_entry = '» '.._entry
+			entryTrimmed = '» '..entryTrimmed
 		else
-			_entry = '  '.._entry
+			entryTrimmed = '  '..entryTrimmed
 		end
 		
 		-- Selection indicator
 		if selected then
 			-- Default indicator
 			if clipboardAction == 0 then
-				_entry = _entry..' ?'
+				entryTrimmed = entryTrimmed..' ?'
 				
 			-- Copy indicator
 			elseif clipboardAction == 1 then
-				_entry = _entry..' +'
+				entryTrimmed = entryTrimmed..' +'
 
 			-- Cut indicator
 			elseif clipboardAction == 2 then
-				_entry = _entry..' -'
+				entryTrimmed = entryTrimmed..' -'
 				
 			end
 		end
 		
 		term.setCursorPos(view.x, view.y + y)
-		term.write(_entry)
+		term.write(entryTrimmed)
 		
 		y = y + 1
 	end
@@ -140,6 +140,7 @@ function drawMenu(x, y, menuFunctions, menuItemSelection, subMenuItemSelection)
 				drawLineV(currentX, currentY, menuHeight)
 				drawLineV(currentX + menuWidth, currentY, menuHeight)
 				
+				-- Draw sub-menu items
 				for subIndex, subMenuFunction in ipairs(menuFunction.children) do
 					currentY = currentY + 1
 					term.setCursorPos(currentX + 1, currentY)

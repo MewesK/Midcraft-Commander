@@ -59,22 +59,38 @@ end
 
 function listEntries(path)
 	-- Sort into dirs/files
-	local files = {}
 	local dirs = {}
+	local files = {}
 
 	if path ~= '/' then
 		table.insert(dirs, '/..')
 	end
 	
-	for index, entry in pairs(fs.list(path)) do
-		local sPath = buildPath(path, entry)
-		if fs.isDir(sPath) then
-			table.insert(dirs, '/'..entry)
-		else
-			table.insert(files, entry)
+	-- Handle virtual music folder
+	if path == '/' then
+		table.insert(dirs, '/music')
+	elseif path == '/music' then
+		-- Get discs
+		for index, side in ipairs(redstone.getSides()) do
+			if disk.isPresent(side) and disk.hasAudio(side) then
+				table.insert(files, disk.getAudioTitle(side)..' ('..side..')')
+			end
 		end
 	end
-				
+	
+	if fs.exists(path) then
+		-- Get files and folders
+		for index, entry in pairs(fs.list(path)) do
+			local sPath = buildPath(path, entry)
+			if fs.isDir(sPath) then
+				table.insert(dirs, '/'..entry)
+			else
+				table.insert(files, entry)
+			end
+		end
+	end
+	
+	-- Sort tables
 	table.sort(dirs)
 	table.sort(files)
 	
