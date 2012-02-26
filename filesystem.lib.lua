@@ -33,7 +33,7 @@ function createEntryFromPath(_path, _type)
 		return createEntry('/', '/', 0)
 	else
 		local _name = buildPath(fs.getName(_path))
-		return createEntry(string.gsub(_path, _name, ''), _name, 0)
+		return createEntry(string.gsub(_path, _name, ''), _name, _type or 0)
 	end
 end
 
@@ -42,7 +42,7 @@ function compareEntries(entry1, entry2)
 end
 
 function deleteEntry(entry)
-	if not fs.isReadOnly(entry.fullpath) and not (entry.meta and entry.meta.side) then
+	if entry and not fs.isReadOnly(entry.fullpath) and not (entry.meta and entry.meta.side) then
 		fs.delete(entry.fullpath)
 		return true
 	end
@@ -115,10 +115,12 @@ function listEntries(folder, virtualEntries, folderTypes)
 		local fileType = 1	-- 1 = program
 		
 		-- Overwrite type if necessary
-		for _path, _type in pairs(folderTypes) do
-			if folder.fullpath == _path and (_type == 1 or _type == 2 or _type == 4) then
-				fileType = _type
-				break
+		if folderTypes then
+			for _path, _type in pairs(folderTypes) do
+				if folder.fullpath == _path and (_type == 1 or _type == 2 or _type == 4) then
+					fileType = _type
+					break
+				end
 			end
 		end
 		
@@ -145,18 +147,20 @@ function listEntries(folder, virtualEntries, folderTypes)
 	end	
 	
 	-- Handle virtual entries
-	for index, entry in ipairs(virtualEntries) do
-		-- virtual folder
-		if entry.path == folder.fullpath then
-			table.insert(dirs, entry)	-- 0 = folder
+	if virtualEntries then
+		for index, entry in ipairs(virtualEntries) do
+			-- virtual folder
+			if entry.path == folder.fullpath then
+				table.insert(dirs, entry)	-- 0 = folder
 		
-		-- virtual entry
-		elseif entry.fullpath == folder.fullpath and entry.action then
-			for index, _entry in ipairs(entry.action(entry)) do
-				if _entry.type == 0 then
-					table.insert(dirs, _entry)	-- 0 = folder
-				else
-					table.insert(files, _entry)
+			-- virtual entry
+			elseif entry.fullpath == folder.fullpath and entry.action then
+				for index, _entry in ipairs(entry.action(entry)) do
+					if _entry.type == 0 then
+						table.insert(dirs, _entry)	-- 0 = folder
+					else
+						table.insert(files, _entry)
+					end
 				end
 			end
 		end
@@ -183,6 +187,7 @@ function runProgram(path, ...)
 			shell.run('shell', path, ...)
 		else
 			shell.run(path, ...)
+
 			-- Wait for user action if text is on screen
 			local cx,cy = term.getCursorPos()
 			if cx ~= 1 or cy ~= 1 then

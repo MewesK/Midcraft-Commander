@@ -41,24 +41,28 @@ local w, h = term.getSize()
 local hw = math.floor(w / 2)
 local shellEntry = createEntryFromPath(shell.dir())
 
--- View vars
+-- Views
 local views = {}
 local _activeView = 1;
 
 -- Virtual entries
 local virtualEntries = {}
 
--- Menu vars
+-- Menu
 local menuActive = false
 local menuFunctions = {}
 local menuItemSelection = 0
 local subMenuItemSelection = 0
 
--- Windows
+-- Alert window
 local window = nil
 
--- Integrated shell vars
+-- Integrated shell command history
 local commandHistory = {}
+
+-- Clipboard
+local clipboard = {}
+local clipboardAction = 0 -- 0 = none, 1 = copy, 2 = cut
 
 -- Config
 local configPath = 'midcraft-commander.conf'
@@ -71,10 +75,6 @@ local config = loadConfig(configPath, {
 		['/rom/help'] = 4
 	}
 })
-
--- Clipboard vars
-local clipboard = {}
-local clipboardAction = 0 -- 0 = none, 1 = copy, 2 = cut
 
 -- Functions
 
