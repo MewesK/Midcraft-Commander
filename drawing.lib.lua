@@ -144,7 +144,7 @@ function drawEntries(view, clipboard, clipboardAction, virtualEntries, buildPath
 		end
 		
 		term.setCursorPos(view.x, view.y + y)
-		term.write(prefix..trimText(entry.name, view.width - (2 + # suffix))..suffix)
+		term.write(prefix..trimText(entry.name, view.width - (2 + # suffix + 1))..suffix)
 		
 		y = y + 1
 	end

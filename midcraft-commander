@@ -1,14 +1,14 @@
 -----------------------------------------------------------------------------
 -- Midcraft Commander
 -- Author: MewK
--- Version: 0.5 beta
+-- Version: 0.x network beta
 --
 -- This program is released under the MIT License (MIT).
 -----------------------------------------------------------------------------
 
 local args = { ... }
 if # args == 1 and (args[1] == '-h' or args[1] == '?') then
-	print('Midcraft Commander 0.5 beta')
+	print('Midcraft Commander 0.x network beta')
 	print('')
 	print('Keys:')
 	print('  Ctrl   Activates the menu') 
@@ -32,6 +32,8 @@ shell.run('config.lib.lua')
 shell.run('drawing.lib.lua')
 shell.run('filesystem.lib.lua')
 
+local activeModem = nil
+
 -- General vars
 local running = true
 local keyFunctions = {}
@@ -41,26 +43,31 @@ local w, h = term.getSize()
 local hw = math.floor(w / 2)
 local shellEntry = createEntryFromPath(shell.dir())
 
--- View vars
+-- Views
 local views = {}
 local _activeView = 1;
 
 -- Virtual entries
 local virtualEntries = {}
 
--- Menu vars
+-- Menu
 local menuActive = false
 local menuFunctions = {}
 local menuItemSelection = 0
 local subMenuItemSelection = 0
 
--- Windows
+-- Alert window
 local window = nil
 
--- Integrated shell vars
+-- Integrated shell command history
 local commandHistory = {}
 
+-- Clipboard
+local clipboard = {}
+local clipboardAction = 0 -- 0 = none, 1 = copy, 2 = cut
+
 -- Config
+
 local configPath = 'midcraft-commander.conf'
 local config = loadConfig(configPath, {
 	editor = 'edit',
@@ -71,10 +78,6 @@ local config = loadConfig(configPath, {
 		['/rom/help'] = 4
 	}
 })
-
--- Clipboard vars
-local clipboard = {}
-local clipboardAction = 0 -- 0 = none, 1 = copy, 2 = cut
 
 -- Functions
 
@@ -225,6 +228,63 @@ virtualEntries = {
 		end, 
 		{
 			['playing'] = nil 
+		}
+	),
+	
+	-- Network folder
+	createEntry('/', 'network', 0, 
+		function(_this)
+			local hosts = {}
+
+			-- Request available hosts
+			rednet.broadcast('mcom_lookup;'..os.getComputerID())
+			
+			-- Listen for hosts
+			local timeoutTimer = os.startTimer(2)
+			while true do
+				local event, cid, message = os.pullEvent()
+
+				-- Rednet event
+				if event == 'rednet_message' then
+					error('Receiving "'..message..'" to '..cid)
+					for command, data in string.gmatch(message, "([%w_]+);(%w+)") do
+						if command == 'mcom_ready' and data then
+							-- Host entry
+							table.insert(hosts, createEntry(
+								_this.fullpath, 
+								'Computer '..data, 
+								3, 
+								function(__this)
+									if __this and __this.meta and __this.meta.cid then										
+										-- Show window
+										local _text = {
+											'Computer-ID:',
+											__this.meta.cid,
+										}
+										window = { w = 40, h = # _text + 4, title = 'Info', text = _text }
+										hideMenu()
+										drawScreen()
+										os.pullEvent('key')
+										window = nil
+									end
+								end, 
+								{ 
+									['cid'] = data
+								}
+							))
+						end
+					end
+					
+				-- Timer event
+				elseif event == 'timer' and cid == timeoutTimer then
+					break
+				end
+			end	
+			return hosts
+		end,
+		{
+			['sending'] = nil,
+			['receiving'] = nil		
 		}
 	)
 }
@@ -458,7 +518,7 @@ menuFunctions = {
 					local name = readUserLine('Name: ', nil)
 					if name ~= '' then
 						local file = io.open(buildPath(activeView().currentFolder, name), 'w')
-						file:write('')
+						file:write(' ')
 						file:close()
 						
 						refreshEntries()
@@ -475,6 +535,37 @@ menuFunctions = {
 						fs.makeDir(buildPath(activeView().currentFolder, name))
 						refreshEntries()
 					end
+				end
+			},
+			
+			-- Open Network command
+			{ 
+				name = 'Open Connection',
+				action = function(entry)
+					activeModem = nil
+					for index, side in ipairs(redstone.getSides()) do
+						if peripheral.isPresent(side) and peripheral.getType(side) == 'modem' then
+							activeModem = side
+							break
+						end
+					end
+
+					local _text = {  }
+					if activeModem then
+						rednet.open(activeModem)
+						table.insert(_text, 'Connection on '..activeModem..' modem opened.')
+					else
+						table.insert(_text, 'Error: No modem available!')
+					end
+					
+					-- Show window
+					window = { w = 40, h = # _text + 4, title = 'Open Connection', text = _text }
+					hideMenu()
+					drawScreen()
+					
+					sleep(2)
+					
+					window = nil
 				end
 			}
 		}
@@ -691,25 +782,44 @@ drawScreen()
 
 -- Fetch key events
 while running do
-	local event, param = os.pullEvent('key')
-	-- Key functions
-	for index, keyFunction in ipairs(keyFunctions) do
-		if keyFunction.code == param then
-			keyFunction.action()
-			drawScreen()
-			break
-		end
-	end
+	local event, param1, param2 = os.pullEvent()
 	
-	-- Menu shortcuts
-	for index, menuFunction in ipairs(menuFunctions) do
-		if menuFunction.children then
-			for subIndex, subMenuFunction in ipairs(menuFunction.children) do
-				if subMenuFunction.param and subMenuFunction.param == param then
-					subMenuFunction.action(activeView().entryList[activeView().selectionIndex])
-					hideMenu()
-					drawScreen()
-					break
+	-- Rednet event
+	if event == 'rednet_message' then
+		-- param1 is the computer-id
+		-- param2 is the message
+		
+		if param2 then
+			local command, _param1 = string.gmatch(param2, "([%w_]+);(%w+)")
+			if command == 'mcom_lookup' then
+				error('Sending "mcom_ready;'..os.getComputerID()..'" to '..param1..'/'.._param1)
+				rednet.send(param1, 'mcom_ready;'..os.getComputerID())
+			end
+		end
+	
+	-- Key event
+	elseif event == 'key' then
+		-- param1 is the key-code
+	
+		-- Key functions
+		for index, keyFunction in ipairs(keyFunctions) do
+			if keyFunction.code == param1 then
+				keyFunction.action()
+				drawScreen()
+				break
+			end
+		end
+		
+		-- Menu shortcuts
+		for index, menuFunction in ipairs(menuFunctions) do
+			if menuFunction.children then
+				for subIndex, subMenuFunction in ipairs(menuFunction.children) do
+					if subMenuFunction.param and subMenuFunction.param == param1 then
+						subMenuFunction.action(activeView().entryList[activeView().selectionIndex])
+						hideMenu()
+						drawScreen()
+						break
+					end
 				end
 			end
 		end
