@@ -27,13 +27,21 @@ function createEntry(_path, _name, _type, _action, _meta, _info)
 	}
 end
 
+function getPath(_path)
+	for match in string.gmatch(_path, '(.+)/.*') do
+		return match
+	end
+	return '/' 
+end
+
 function createEntryFromPath(_path, _type)
 	_path = buildPath(_path)
 	if _path == '/' then
 		return createEntry('/', '/', 0)
 	else
+		local _parent = buildPath(getPath(_path))
 		local _name = buildPath(fs.getName(_path))
-		return createEntry(string.gsub(_path, _name, ''), _name, _type or 0)
+		return createEntry(_parent, _name, 0)
 	end
 end
 
@@ -178,7 +186,7 @@ function listEntries(folder, virtualEntries, folderTypes)
 end
 
 function runProgram(path, ...)
-	path = shell.resolveProgram(path)
+	path = buildPath(shell.resolveProgram(path))
 	if path ~= nil then
 		term.clear()
 		term.setCursorPos(1, 1)
